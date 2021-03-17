@@ -1,5 +1,7 @@
+
 import pygame, sys, os
 from pygame.locals import *
+
 
 #define important variables
 screenWidth = 1080
@@ -30,8 +32,17 @@ def main():
 
     #jumping variables, force is how high player jumps
     jumping = False
-    jumpForce = 13.5
+    jumpForce = 12
     jumpTime = jumpForce
+
+    #velocity variables
+    xChange = 0
+    accel = 0
+    maxSpeed = 12
+    accelChange = .8
+
+    holdingLeft = False
+    holdingRight = False
 
     #uses os to generate an array based on the names of files in the directory, creates the map index
     #and screen offset horizontal variable used in the tile renderer
@@ -48,11 +59,20 @@ def main():
     while gameRunning == True:
         #FPS lock
         clock.tick(60)
-        #detect X on window
+        #detect X on window and key release
         for event in pygame.event.get():
             if event.type == QUIT:
                 return
-        
+
+            if event.type == pygame.KEYUP:
+                if event.key == pygame.K_a:
+                    holdingLeft = False
+                    accel = 0
+                if event.key == pygame.K_d:
+                    holdingRight = False
+                    accel = 0
+                
+
         #gravity plus initial floor collision
         if jumping == True:
             gravityVal = 0
@@ -63,17 +83,16 @@ def main():
 
         #Pygame Control Detection   
         keys = pygame.key.get_pressed()
-    
         if keys[pygame.K_a]:
-            ball.x += -10
-
+            holdingLeft = True
         if keys[pygame.K_d]:
-            ball.x += 10
+            holdingRight = True
+        
         if keys[pygame.K_t]:
             if mapIndex == 1:
                 CameraX = 2160
                 CameraY = 0
-
+        
         #jumping system, uses a math equation to generate a smooth arc
         if jumping == False:
             if keys[pygame.K_SPACE]:
@@ -113,6 +132,28 @@ def main():
             screenMinRight += -10
             screenMinLeft += -10
         
+        #accelerate code
+
+        if holdingLeft == True:
+            accel = -accelChange
+        if holdingRight == True:
+            accel = accelChange
+
+        xChange += (accel*1.4)
+        
+        if accel == 0 and xChange > .6:
+            xChange -= .3
+        elif accel == 0 and xChange < -.6:
+            xChange += .3
+        elif accel == 0:
+            xChange = 0
+        
+
+        if abs(xChange) >= maxSpeed:
+            xChange = xChange/abs(xChange) * maxSpeed
+
+        ball.x += xChange
+        
         pygame.display.flip()
 
 #entity class to make loading assets easier
@@ -130,4 +171,5 @@ class Player(Entity):
     
     def getImage(self):
         return self.image
+
 if __name__ == '__main__': main()
