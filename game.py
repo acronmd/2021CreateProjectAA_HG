@@ -9,6 +9,14 @@ screenHeight = 720
 size = screenWidth, screenHeight
 gameRunning = True
 clock = pygame.time.Clock()
+scores = open("scores.txt", "r")
+highScores = scores.read().split(",")
+### next portion of code reworked from kite python docs about replacing strings in lists
+highScores = [s.replace("[", "") for s in highScores]
+highScores = [s.replace("]", "") for s in highScores]
+### end of reworked code
+for i in range(0, len(highScores)):
+    highScores[i] = int(highScores[i])
 
 def main():
     # Initialise screen
@@ -16,7 +24,14 @@ def main():
     screen = pygame.display.set_mode((size))
     pygame.display.set_caption('Draft Game')
     ball = Player("turtle1.png", 0, 0)
-    wall = Collision("Wall.png", 120, 465)
+    wall = Collision("Wall.png", 600, 590)
+    isDead = False
+    isMoving = False
+    enemyRunning = False
+    affected = True
+    scoreSet = False
+    speed = 11
+    wallMinVal = 0
 
     # Fill background
     background = pygame.Surface(screen.get_size())
@@ -26,7 +41,7 @@ def main():
     #camera offsets and minimum values to move camera, while also setting variables for the tile renderer to use
     CameraX = 0
     CameraY = 0
-    screenMinRight = 850
+    screenMinRight = 650
     screenMinRightMap = screenMinRight
     screenMinLeft = 130
     screenMinLeftMap = screenMinLeft
@@ -51,15 +66,28 @@ def main():
     #and screen offset horizontal variable used in the tile renderer
     mapTileset = os.listdir("Graphics\\Tiles")
     mapIndex = 0
+    mapIndex2 = 3
+    
     screenOffsetX = 0
 
 
     #tile loader and unloader, used for loading and unloading background when needed
     def showTiles(offset):
-        screen.blit(pygame.image.load("Graphics\\Tiles\\" + mapTileset[mapIndex]).convert_alpha(), (offset * (1080 * mapIndex) - CameraX, 0 - CameraY))
-        screen.blit(pygame.image.load("Graphics\\Tiles\\" + mapTileset[mapIndex + 1]).convert_alpha(), (offset + 1 * (1080 * (mapIndex + 1)) - CameraX, 0 - CameraY))
-    player_inage = ball.getImage()
-    player_rect = pygame.Rect(ball.x, ball.y, player_inage.get_width(), player_inage.get_width())
+        if isMoving == False:
+            screen.blit(pygame.image.load("Graphics\\Tiles\\" + mapTileset[mapIndex]).convert_alpha(), (offset * (1080 * mapIndex) - CameraX, 0))
+            screen.blit(pygame.image.load("Graphics\\Tiles\\" + mapTileset[mapIndex + 1]).convert_alpha(), (offset + 1 * (1080 * (mapIndex + 1)) - CameraX, 0 - CameraY))
+        elif mapIndex == 3:
+            screen.blit(pygame.image.load("Graphics\\Tiles\\" + mapTileset[mapIndex]).convert_alpha(), (offset + 1 * (1080 * mapIndex2 + 1) - CameraX, 0))
+            screen.blit(pygame.image.load("Graphics\\Tiles\\" + mapTileset[mapIndex + 1]).convert_alpha(), (offset + 1 * (1080 * (mapIndex2 + 1)) - CameraX, 0 - CameraY))
+        else:
+            screen.blit(pygame.image.load("Graphics\\Tiles\\" + mapTileset[mapIndex]).convert_alpha(), (offset + 1 * (1080 * mapIndex + 1) - CameraX, 0))
+            screen.blit(pygame.image.load("Graphics\\Tiles\\" + mapTileset[mapIndex + 1]).convert_alpha(), (offset + 1 * (1080 * (mapIndex + 1)) - CameraX, 0 - CameraY))
+            print("player" + str(ball.x))
+            print("enemy" + str(wall.x))
+
+    player_image = ball.getImage()
+    player_rect = pygame.Rect(ball.x, ball.y, player_image.get_width() - 60, player_image.get_height())
+    
     # Event loop
     while gameRunning == True:
         #FPS lock
@@ -91,22 +119,24 @@ def main():
 
         #Pygame Control Detection   
         inputs = pygame.key.get_pressed()
-        if inputs[pygame.K_a]:
+        if inputs[pygame.K_a] and isDead == False:
             holdingLeft = True
-        if inputs[pygame.K_d]:
+        if inputs[pygame.K_d] and isDead == False:
             holdingRight = True
-            print(gravityVal)
-            print(ball.y)
         
         if inputs[pygame.K_t]:
             if mapIndex == 1:
+                isMoving = True
+                enemyRunning = True
+                affected = False
+                wall.x = 1100
                 CameraX = 2160
+                screenMinRightMap = 2159
                 CameraY = 0
-                ball.test()
         
         #jumping system, uses a math equation to generate a smooth arc
         if jumping == False:
-            if inputs[pygame.K_SPACE]:
+            if inputs[pygame.K_SPACE] and isDead == False:
                 jumping = True
                 grounded = False
         
@@ -118,20 +148,59 @@ def main():
                 jumpTime = jumpForce
                 jumping = False
 
-        platform_rect = pygame.Rect(1000, 465, 100, 40)
-        player_rect.x = ball.x
+        if affected == True:
+            player_rect.x = ball.x + 30
+        else:
+            player_rect.x = ball.x + 30 - CameraX
         player_rect.y = ball.y
+        wall.rect.x = wall.x
+        wall.rect.y = wall.y
         showTiles(screenOffsetX)
         screen.blit(ball.getImage(), (ball.x - CameraX,ball.y - CameraY))
-        if player_rect.colliderect(platform_rect): 
-            print(gravityVal)
-            print(grounded)
+        #make the spike move with camera or being a stationary object independent from the camera
+        if affected == True:
+            screen.blit(wall.getImage(), (wall.x - CameraX, wall.y - CameraY))
+        else:
+            screen.blit(wall.getImage(), (wall.x , wall.y))
+        #death screen and collision
+        if isDead == True:
+            screen.blit(pygame.image.load("Graphics\\" + "death.png").convert_alpha(), (90, 90))
+            if scoreSet == False:
+                highScores.append(round(ball.x))
+                highScores.sort(reverse=True)
+                open("scores.txt", "w+").write(str(highScores))
+                scoreSet = True
+                print(highScores)
+        if player_rect.colliderect(wall.rect): 
+            isDead = True
 
-        #tile renderer, detects where the player is on the horizontal scale between the 3 mapIndex floor levels
+        #tile renderer, detects where the player is on the horizontal scale between the mapIndex floor levels
+        if affected == False and CameraX > screenMinRightMap:
+            screenMinRightMap += 1080
+            if mapIndex == 3:
+                mapIndex = mapIndex
+                mapIndex2 += 1
+            else:
+                mapIndex += 1
+
+
         if ball.x >= (screenWidth + screenMinRightMap) and mapIndex <1:
-            screenMinRightMap += 950
+            screenMinRightMap += 650
             screenOffsetX += 1
             mapIndex += 1
+
+        if isMoving == True:
+            CameraX += 5
+            screenMinRight += 5
+            screenMinLeft += 5
+
+        if enemyRunning == True:
+            wall.x -= speed
+            if wall.x < -30:
+                speed += 2
+                wall.x = 1100
+        
+
 
         # vertical map code
         #if ball.x <= (screenWidth + screenMinLeftMap) and mapIndex == 1:
@@ -140,11 +209,11 @@ def main():
         #    mapIndex -= 1
         
         #if player is past a certain x value, move camera to adjust for it
-        if ball.x > screenMinRight:
+        if ball.x > screenMinRight and isMoving == False:
             CameraX += 10
             screenMinRight += 10
             screenMinLeft += 10
-        if ball.x < screenMinLeft and ball.x > 130:
+        if ball.x < screenMinLeft and ball.x > 130 and isMoving == False:
             CameraX += -10
             screenMinRight += -10
             screenMinLeft += -10
@@ -181,21 +250,15 @@ class Entity(pygame.sprite.Sprite):
 #generate entity with imagename as input under the player subclass of entity class
 class Player(Entity):
     def __init__(self, imageName, xPos, yPos):
-        self.walkingAnimSet = os.listdir("Graphics\\Turtle")
         self.x= xPos
         self.y= yPos
         Entity.__init__(self)
-        self.walkingAnim = []
-        for x in self.walkingAnimSet:
-            self.walkingAnim.append(pygame.image.load("Graphics\\Turtle\\" + x))
         self.image = pygame.image.load("Graphics\\" + imageName).convert_alpha()
         self.walkIndex = 0
     
     def getImage(self):
         return self.image
     
-    def test(self):
-        return print(self.walkingAnim[2])
 
 class Collision(Entity):
     def __init__(self, imageName, provX, provY):
